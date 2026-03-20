@@ -38,7 +38,7 @@ The `Emails/` and `Emails Round/` folders contain the submission emails to be us
 
 ## Requirements
 
-- **Language:** Python or TypeScript
+- **Language:** Python, TypeScript or C#
 - **Database:** SQLite, PostgreSQL, or equivalent local DB
 - **AI/LLM:** Use of an LLM is a key capability being evaluated — an Anthropic API key will be provided
 - **Deployment:** Local machine, or private/secure public cloud
