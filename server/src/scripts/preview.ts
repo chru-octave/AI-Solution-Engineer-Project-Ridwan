@@ -1,9 +1,9 @@
 import * as path from "path";
 import * as fs from "fs";
-import { parseEmlFile, buildContentString } from "../services/email-parser";
+import { parseEmlFile, buildContentString, parsePdfFile, buildPdfContentString } from "../services/email-parser";
 import { extractRawSubmissionData } from "../services/anthropic";
 import { SubmissionExtractionSchema } from "../services/extraction-schema";
-import { collectEmlFiles } from "../services/ingestion";
+import { collectIngestableFiles } from "../services/ingestion";
 
 const DIVIDER = "─".repeat(60);
 
@@ -36,28 +36,40 @@ function printSection(title: string, data: unknown) {
 
 async function previewSingle(filePath: string, skipLlm: boolean) {
   const fileName = path.basename(filePath);
+  const isPdf = filePath.toLowerCase().endsWith(".pdf");
   printHeader(fileName);
 
-  console.log("\n  Parsing email...");
-  const parsed = await parseEmlFile(filePath);
+  let content: string;
 
-  console.log(`  From:    ${parsed.from || "(unknown)"}`);
-  console.log(`  To:      ${parsed.to || "(unknown)"}`);
-  console.log(`  Subject: ${parsed.subject || "(unknown)"}`);
-  console.log(`  Date:    ${parsed.date?.toISOString() || "(unknown)"}`);
-  console.log(`  Body:    ${parsed.textBody.length} chars (text), ${parsed.htmlBody.length} chars (html)`);
-
-  if (parsed.attachments.length > 0) {
-    console.log(`\n  Attachments (${parsed.attachments.length}):`);
-    for (const att of parsed.attachments) {
-      const extracted = att.text ? `${att.text.length} chars extracted` : "binary — not extracted";
-      console.log(`    • ${att.filename} (${att.contentType}, ${att.size} bytes) → ${extracted}`);
-    }
+  if (isPdf) {
+    console.log("\n  Parsing PDF...");
+    const parsed = await parsePdfFile(filePath);
+    console.log(`  File:    ${parsed.filename}`);
+    console.log(`  Size:    ${parsed.size} bytes`);
+    console.log(`  Text:    ${parsed.text.length} chars extracted`);
+    content = buildPdfContentString(parsed);
   } else {
-    console.log("\n  Attachments: none");
+    console.log("\n  Parsing email...");
+    const parsed = await parseEmlFile(filePath);
+    console.log(`  From:    ${parsed.from || "(unknown)"}`);
+    console.log(`  To:      ${parsed.to || "(unknown)"}`);
+    console.log(`  Subject: ${parsed.subject || "(unknown)"}`);
+    console.log(`  Date:    ${parsed.date?.toISOString() || "(unknown)"}`);
+    console.log(`  Body:    ${parsed.textBody.length} chars (text), ${parsed.htmlBody.length} chars (html)`);
+
+    if (parsed.attachments.length > 0) {
+      console.log(`\n  Attachments (${parsed.attachments.length}):`);
+      for (const att of parsed.attachments) {
+        const extracted = att.text ? `${att.text.length} chars extracted` : "binary — not extracted";
+        console.log(`    • ${att.filename} (${att.contentType}, ${att.size} bytes) → ${extracted}`);
+      }
+    } else {
+      console.log("\n  Attachments: none");
+    }
+
+    content = buildContentString(parsed);
   }
 
-  const content = buildContentString(parsed);
   console.log(`\n  Total content for LLM: ${content.length} chars`);
 
   if (skipLlm) {
@@ -117,8 +129,8 @@ async function main() {
   if (fileArgs.length === 0) {
     console.log("Usage: preview.ts [--parse-only] <file-or-directory>");
     console.log("");
-    console.log("  <file-or-directory>  Path to an .eml file, or a directory to scan");
-    console.log("  --parse-only         Only parse the email, skip LLM extraction");
+    console.log("  <file-or-directory>  Path to an .eml or .pdf file, or a directory to scan");
+    console.log("  --parse-only         Only parse the file, skip LLM extraction");
     console.log("");
     console.log("Examples:");
     console.log('  npm run preview -- "/app/emails/Saint Michael Transportation LTD - New Submission - Eff 8_19.eml"');
@@ -134,14 +146,14 @@ async function main() {
   }
 
   const stat = fs.statSync(target);
-  const files = stat.isDirectory() ? collectEmlFiles(target) : [target];
+  const files = stat.isDirectory() ? collectIngestableFiles(target) : [target];
 
   if (files.length === 0) {
-    console.error("No .eml files found.");
+    console.error("No .eml or .pdf files found.");
     process.exit(1);
   }
 
-  console.log(`Found ${files.length} .eml file(s)\n`);
+  console.log(`Found ${files.length} file(s)\n`);
 
   for (const file of files) {
     try {

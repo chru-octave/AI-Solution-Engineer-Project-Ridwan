@@ -1,6 +1,7 @@
 import { simpleParser, ParsedMail } from "mailparser";
 import { PDFParse } from "pdf-parse";
 import * as fs from "fs";
+import * as path from "path";
 
 export interface AttachmentInfo {
   filename: string;
@@ -79,7 +80,43 @@ export async function parseEmlFile(filePath: string): Promise<ParsedEmail> {
   };
 }
 
+export interface ParsedPdf {
+  filename: string;
+  text: string;
+  size: number;
+}
+
+export async function parsePdfFile(filePath: string): Promise<ParsedPdf> {
+  const raw = fs.readFileSync(filePath);
+  const parser = new PDFParse({ data: new Uint8Array(raw) });
+  const result = await parser.getText();
+  await parser.destroy();
+
+  return {
+    filename: path.basename(filePath),
+    text: result.text,
+    size: raw.length,
+  };
+}
+
 const MAX_CONTENT_CHARS = 180_000;
+
+export function buildPdfContentString(parsed: ParsedPdf): string {
+  const sections: string[] = [
+    `Source Document: ${parsed.filename} (${parsed.size} bytes)`,
+    "",
+    "=== PDF CONTENT ===",
+    parsed.text || "[empty document]",
+  ];
+
+  let content = sections.join("\n");
+
+  if (content.length > MAX_CONTENT_CHARS) {
+    content = content.slice(0, MAX_CONTENT_CHARS) + "\n\n[... TRUNCATED — content exceeded context limit ...]";
+  }
+
+  return content;
+}
 
 export function buildContentString(parsed: ParsedEmail): string {
   const sections: string[] = [
