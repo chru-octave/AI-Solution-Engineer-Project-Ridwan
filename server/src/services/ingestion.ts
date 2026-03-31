@@ -12,6 +12,8 @@ import {
 import {
   extractSubmissionData,
   extractRawSubmissionData,
+  extractRawFromPdfDocument,
+  extractFromPdfDocument,
   mergeExtractionsViaLLM,
 } from "./anthropic";
 import { mergeExtractions } from "./extraction-merge";
@@ -47,6 +49,29 @@ export function collectIngestableFiles(dir: string): string[] {
   return results;
 }
 
+async function extractSingleSection(
+  section: ContentSection,
+  mode: "raw"
+): Promise<Record<string, unknown>>;
+async function extractSingleSection(
+  section: ContentSection,
+  mode: "parsed"
+): Promise<SubmissionExtraction>;
+async function extractSingleSection(
+  section: ContentSection,
+  mode: "raw" | "parsed"
+): Promise<Record<string, unknown> | SubmissionExtraction> {
+  if (section.pdfBuffer) {
+    console.log(`    → Using PDF document vision for: ${section.label}`);
+    return mode === "raw"
+      ? extractRawFromPdfDocument(section.pdfBuffer)
+      : extractFromPdfDocument(section.pdfBuffer);
+  }
+  return mode === "raw"
+    ? extractRawSubmissionData(section.content)
+    : extractSubmissionData(section.content);
+}
+
 async function extractFromSections(
   sections: ContentSection[],
   mode: ExtractionMode,
@@ -65,20 +90,22 @@ async function extractFromSections(
   }
 
   if (sections.length === 1) {
+    const s = sections[0];
     console.log(`  Single section — extracting directly`);
-    return extractSubmissionData(sections[0].content);
+    return extractSingleSection(s, "parsed");
   }
 
   console.log(`  ${sections.length} sections detected (mode: ${mode})`);
   for (const s of sections) {
-    console.log(`    • ${s.label} (${s.content.length} chars)`);
+    const visionTag = s.pdfBuffer ? " [PDF vision]" : "";
+    console.log(`    • ${s.label} (${s.content.length} chars)${visionTag}`);
   }
 
   if (mode === "thorough") {
     const partials: Record<string, unknown>[] = [];
     for (let i = 0; i < sections.length; i++) {
       console.log(`  [map ${i + 1}/${sections.length}] Extracting: ${sections[i].label}`);
-      const raw = await extractRawSubmissionData(sections[i].content);
+      const raw = await extractSingleSection(sections[i], "raw");
       partials.push(raw);
     }
     console.log(`  [reduce] Merging ${partials.length} extractions via LLM for: ${fileName}`);
@@ -88,7 +115,7 @@ async function extractFromSections(
   const partials: SubmissionExtraction[] = [];
   for (let i = 0; i < sections.length; i++) {
     console.log(`  [map ${i + 1}/${sections.length}] Extracting: ${sections[i].label}`);
-    const extracted = await extractSubmissionData(sections[i].content);
+    const extracted = await extractSingleSection(sections[i], "parsed");
     partials.push(extracted);
   }
   console.log(`  Merging ${partials.length} extractions programmatically for: ${fileName}`);

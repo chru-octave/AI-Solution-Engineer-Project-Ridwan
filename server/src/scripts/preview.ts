@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import { parseEmlFile, buildContentString, parsePdfFile, buildPdfContentString } from "../services/email-parser";
-import { extractRawSubmissionData } from "../services/anthropic";
+import { extractRawSubmissionData, extractRawFromPdfDocument } from "../services/anthropic";
 import { SubmissionExtractionSchema } from "../services/extraction-schema";
 import { collectIngestableFiles } from "../services/ingestion";
 
@@ -40,6 +40,7 @@ async function previewSingle(filePath: string, skipLlm: boolean) {
   printHeader(fileName);
 
   let content: string;
+  let pdfBuffer: Buffer | undefined;
 
   if (isPdf) {
     console.log("\n  Parsing PDF...");
@@ -48,6 +49,7 @@ async function previewSingle(filePath: string, skipLlm: boolean) {
     console.log(`  Size:    ${parsed.size} bytes`);
     console.log(`  Text:    ${parsed.text.length} chars extracted`);
     content = buildPdfContentString(parsed);
+    pdfBuffer = parsed.buffer;
   } else {
     console.log("\n  Parsing email...");
     const parsed = await parseEmlFile(filePath);
@@ -84,7 +86,13 @@ async function previewSingle(filePath: string, skipLlm: boolean) {
 
   console.log("\n  Sending to Claude for extraction...");
   const startMs = Date.now();
-  const raw = await extractRawSubmissionData(content);
+  let raw: Record<string, unknown>;
+  if (pdfBuffer) {
+    console.log("  (using PDF document vision for direct table/number reading)");
+    raw = await extractRawFromPdfDocument(pdfBuffer);
+  } else {
+    raw = await extractRawSubmissionData(content);
+  }
   const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(1);
   console.log(`  Claude responded in ${elapsedSec}s`);
 

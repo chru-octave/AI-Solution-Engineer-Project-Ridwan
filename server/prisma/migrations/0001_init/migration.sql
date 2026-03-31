@@ -2,7 +2,7 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateTable
-CREATE TABLE "submissions" (
+CREATE TABLE "email_submissions" (
     "id" TEXT NOT NULL,
     "sourceFile" TEXT NOT NULL,
     "emailFrom" TEXT,
@@ -13,7 +13,7 @@ CREATE TABLE "submissions" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "submissions_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "email_submissions_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -107,7 +107,7 @@ CREATE TABLE "loss_records" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "submissions_sourceFile_key" ON "submissions"("sourceFile");
+CREATE UNIQUE INDEX "email_submissions_sourceFile_key" ON "email_submissions"("sourceFile");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "insured_info_submissionId_key" ON "insured_info"("submissionId");
@@ -119,23 +119,23 @@ CREATE UNIQUE INDEX "broker_info_submissionId_key" ON "broker_info"("submissionI
 CREATE UNIQUE INDEX "exposure_info_submissionId_key" ON "exposure_info"("submissionId");
 
 -- AddForeignKey
-ALTER TABLE "insured_info" ADD CONSTRAINT "insured_info_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "insured_info" ADD CONSTRAINT "insured_info_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "email_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "broker_info" ADD CONSTRAINT "broker_info_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "broker_info" ADD CONSTRAINT "broker_info_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "email_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "lines_of_business" ADD CONSTRAINT "lines_of_business_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "lines_of_business" ADD CONSTRAINT "lines_of_business_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "email_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "limits_requested" ADD CONSTRAINT "limits_requested_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "limits_requested" ADD CONSTRAINT "limits_requested_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "email_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "target_pricing" ADD CONSTRAINT "target_pricing_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "target_pricing" ADD CONSTRAINT "target_pricing_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "email_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "exposure_info" ADD CONSTRAINT "exposure_info_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "exposure_info" ADD CONSTRAINT "exposure_info_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "email_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "loss_records" ADD CONSTRAINT "loss_records_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "loss_records" ADD CONSTRAINT "loss_records_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "email_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

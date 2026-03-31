@@ -8,6 +8,7 @@ export interface AttachmentInfo {
   contentType: string;
   size: number;
   text: string | null;
+  pdfBuffer?: Buffer;
 }
 
 export interface ParsedEmail {
@@ -45,6 +46,7 @@ export async function parseEmlFile(filePath: string): Promise<ParsedEmail> {
         attachment.contentType === "application/pdf" ||
         attachment.filename?.endsWith(".pdf")
       ) {
+        info.pdfBuffer = attachment.content;
         try {
           const parser = new PDFParse({ data: new Uint8Array(attachment.content) });
           const textResult = await parser.getText();
@@ -84,6 +86,7 @@ export interface ParsedPdf {
   filename: string;
   text: string;
   size: number;
+  buffer: Buffer;
 }
 
 export async function parsePdfFile(filePath: string): Promise<ParsedPdf> {
@@ -96,12 +99,14 @@ export async function parsePdfFile(filePath: string): Promise<ParsedPdf> {
     filename: path.basename(filePath),
     text: result.text,
     size: raw.length,
+    buffer: raw,
   };
 }
 
 export interface ContentSection {
   label: string;
   content: string;
+  pdfBuffer?: Buffer;
 }
 
 const MAX_SECTION_CHARS = 180_000;
@@ -135,19 +140,20 @@ export function splitEmailIntoSections(parsed: ParsedEmail): ContentSection[] {
   }
 
   for (const att of parsed.attachments) {
-    if (!att.text) continue;
+    if (!att.text && !att.pdfBuffer) continue;
 
     const attContent = [
       `Source: attachment from email "${parsed.subject || "unknown"}"`,
       `Filename: ${att.filename} (${att.contentType}, ${att.size} bytes)`,
       "",
       "=== ATTACHMENT CONTENT ===",
-      att.text,
+      att.text || "[content available via PDF document vision]",
     ].join("\n");
 
     sections.push({
       label: `attachment: ${att.filename}`,
       content: capContent(attContent),
+      pdfBuffer: att.pdfBuffer,
     });
   }
 
@@ -155,18 +161,17 @@ export function splitEmailIntoSections(parsed: ParsedEmail): ContentSection[] {
 }
 
 export function splitPdfIntoSections(parsed: ParsedPdf): ContentSection[] {
-  if (!parsed.text) return [];
-
   const content = [
     `Source Document: ${parsed.filename} (${parsed.size} bytes)`,
     "",
     "=== PDF CONTENT ===",
-    parsed.text,
+    parsed.text || "[content available via PDF document vision]",
   ].join("\n");
 
   return [{
     label: `pdf: ${parsed.filename}`,
     content: capContent(content),
+    pdfBuffer: parsed.buffer,
   }];
 }
 

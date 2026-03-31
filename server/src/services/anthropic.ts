@@ -68,6 +68,51 @@ export async function extractSubmissionData(
   return SubmissionExtractionSchema.parse(raw);
 }
 
+export async function extractRawFromPdfDocument(
+  pdfBuffer: Buffer
+): Promise<Record<string, unknown>> {
+  const base64Data = pdfBuffer.toString("base64");
+
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: base64Data,
+            },
+          },
+          {
+            type: "text",
+            text: "Extract structured insurance submission data from this PDF document. Read all tables, numbers, and figures carefully — numerical accuracy is critical. Return ONLY valid JSON using the exact keys from the schema.",
+          },
+        ],
+      },
+    ],
+    system: SYSTEM_PROMPT,
+  });
+
+  const textBlock = message.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text response from Anthropic (PDF document)");
+  }
+
+  return parseJsonResponse(textBlock.text);
+}
+
+export async function extractFromPdfDocument(
+  pdfBuffer: Buffer
+): Promise<SubmissionExtraction> {
+  const raw = await extractRawFromPdfDocument(pdfBuffer);
+  return SubmissionExtractionSchema.parse(raw);
+}
+
 const MERGE_SYSTEM_PROMPT = `You are an expert insurance data merging assistant. You will receive multiple partial JSON extractions from different sections of the same insurance submission (e.g. email body, PDF attachments, loss runs).
 
 Your job is to merge them into a single unified extraction using EXACTLY these JSON keys:

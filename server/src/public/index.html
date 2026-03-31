@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Octave Insurance — Submissions Dashboard</title>
+<title>Octave Insurance — Email Submissions Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
@@ -18,6 +18,7 @@
   --accent2: #38b2e8;
   --red: #e84a5f;
   --green: #4ae88a;
+  --purple: #a87ee8;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -58,7 +59,7 @@ h1, h2, h3 {
 
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1rem;
   margin-bottom: 2.5rem;
 }
@@ -83,6 +84,7 @@ h1, h2, h3 {
 .stat-card:nth-child(2)::after { background: var(--accent2); }
 .stat-card:nth-child(3)::after { background: var(--green); }
 .stat-card:nth-child(4)::after { background: var(--red); }
+.stat-card:nth-child(5)::after { background: var(--purple); }
 
 .stat-label {
   font-size: 0.7rem;
@@ -96,6 +98,12 @@ h1, h2, h3 {
   font-family: 'DM Serif Display', serif;
   font-size: 2.2rem;
   line-height: 1;
+}
+
+.stat-detail {
+  font-size: 0.7rem;
+  color: var(--text2);
+  margin-top: 0.4rem;
 }
 
 .charts-row {
@@ -193,6 +201,28 @@ tbody td {
   white-space: nowrap;
 }
 
+.source-badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.source-badge.email {
+  background: rgba(56, 178, 232, 0.12);
+  color: var(--accent2);
+  border: 1px solid rgba(56, 178, 232, 0.3);
+}
+
+.source-badge.pdf {
+  background: rgba(168, 126, 232, 0.12);
+  color: var(--purple);
+  border: 1px solid rgba(168, 126, 232, 0.3);
+}
+
 .detail-panel {
   background: var(--surface2);
   padding: 1.5rem 2rem;
@@ -259,14 +289,31 @@ tbody td {
 
 <div class="header">
   <h1>Octave Insurance</h1>
-  <span class="subtitle">Submission Data Dashboard</span>
+  <span class="subtitle">Email Submissions Dashboard</span>
 </div>
 
 <div class="stats-row" id="stats">
-  <div class="stat-card"><div class="stat-label">Total Submissions</div><div class="stat-value" id="stat-total">--</div></div>
-  <div class="stat-card"><div class="stat-label">Lines of Business</div><div class="stat-value" id="stat-lob">--</div></div>
-  <div class="stat-card"><div class="stat-label">Brokers</div><div class="stat-value" id="stat-brokers">--</div></div>
-  <div class="stat-card"><div class="stat-label">Total Fleet Units</div><div class="stat-value" id="stat-fleet">--</div></div>
+  <div class="stat-card">
+    <div class="stat-label">Total Submissions</div>
+    <div class="stat-value" id="stat-total">--</div>
+    <div class="stat-detail" id="stat-total-detail"></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Lines of Business</div>
+    <div class="stat-value" id="stat-lob">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Brokers</div>
+    <div class="stat-value" id="stat-brokers">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Fleet Units</div>
+    <div class="stat-value" id="stat-fleet">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Loss Records</div>
+    <div class="stat-value" id="stat-losses">--</div>
+  </div>
 </div>
 
 <div class="charts-row">
@@ -282,23 +329,24 @@ tbody td {
 
 <div class="table-section">
   <div class="table-header">
-    <h2>All Submissions</h2>
-    <input class="search-input" id="searchInput" placeholder="Search insured, broker, state, line..." />
+    <h2>All Email Submissions</h2>
+    <input class="search-input" id="searchInput" placeholder="Search insured, broker, state, source file..." />
   </div>
   <table>
     <thead>
       <tr>
-        <th>Insured</th>
+        <th>Source</th>
+        <th>Insured / File</th>
         <th>Broker</th>
         <th>State</th>
         <th>Lines of Business</th>
         <th>Fleet</th>
-        <th>Drivers</th>
+        <th>Losses</th>
         <th>Date</th>
       </tr>
     </thead>
     <tbody id="submissionsBody">
-      <tr><td colspan="7" class="loading">Loading submissions...</td></tr>
+      <tr><td colspan="8" class="loading">Loading submissions...</td></tr>
     </tbody>
   </table>
 </div>
@@ -313,6 +361,16 @@ async function fetchJSON(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
+}
+
+function isEmailSource(s) {
+  return s.sourceFile && s.sourceFile.toLowerCase().endsWith('.eml');
+}
+
+function getDisplayName(s) {
+  if (s.insured?.companyName) return s.insured.companyName;
+  if (s.emailSubject) return s.emailSubject;
+  return s.sourceFile || 'Unknown';
 }
 
 async function loadSummary() {
@@ -332,10 +390,13 @@ async function loadExposures() {
 
   data.forEach(exp => {
     const name = exp.submission?.insured?.companyName || exp.submission?.emailSubject || 'Unknown';
+    const truckCount = exp.numberOfTrucks || 0;
+    const driverCount = exp.numberOfDrivers || 0;
+    if (truckCount === 0 && driverCount === 0) return;
     labels.push(name.length > 22 ? name.slice(0, 22) + '\u2026' : name);
-    trucks.push(exp.numberOfTrucks || 0);
-    drivers.push(exp.numberOfDrivers || 0);
-    totalFleet += (exp.numberOfTrucks || 0);
+    trucks.push(truckCount);
+    drivers.push(driverCount);
+    totalFleet += truckCount;
   });
 
   document.getElementById('stat-fleet').textContent = totalFleet;
@@ -362,6 +423,7 @@ async function loadExposures() {
 
 async function loadLOBChart(summaryData) {
   const lob = summaryData.linesOfBusiness;
+  if (!lob.length) return;
   const colors = ['#e8a838','#38b2e8','#4ae88a','#e84a5f','#a87ee8','#e8d838','#38e8c8','#e87838','#8838e8'];
 
   new Chart(document.getElementById('lobChart'), {
@@ -394,38 +456,64 @@ function escapeHtml(s) {
 }
 
 function renderRow(s) {
-  const insured = escapeHtml(s.insured?.companyName || '\u2014');
+  const isEmail = isEmailSource(s);
+  const sourceBadge = isEmail
+    ? '<span class="source-badge email">EML</span>'
+    : '<span class="source-badge pdf">PDF</span>';
+  const displayName = escapeHtml(getDisplayName(s));
   const broker = escapeHtml(s.broker?.companyName || '\u2014');
   const state = escapeHtml(s.insured?.state || '\u2014');
-  const lobs = (s.linesOfBusiness || []).map(l => `<span class="tag">${escapeHtml(l.type)}</span>`).join('');
+  const lobs = (s.linesOfBusiness || []).map(l => `<span class="tag">${escapeHtml(l.type)}</span>`).join('') || '\u2014';
   const trucks = s.exposures?.numberOfTrucks ?? '\u2014';
-  const drivers = s.exposures?.numberOfDrivers ?? '\u2014';
+  const lossCount = s.losses?.length || 0;
+  const lossDisplay = lossCount > 0 ? `${lossCount} record${lossCount > 1 ? 's' : ''}` : '\u2014';
   const date = s.emailDate ? new Date(s.emailDate).toLocaleDateString() : '\u2014';
 
   return `
     <tr class="data-row" data-id="${s.id}" onclick="toggleDetail('${s.id}')">
-      <td>${insured}</td><td>${broker}</td><td>${state}</td>
-      <td>${lobs}</td><td>${trucks}</td><td>${drivers}</td><td>${date}</td>
+      <td>${sourceBadge}</td>
+      <td>${displayName}</td><td>${broker}</td><td>${state}</td>
+      <td>${lobs}</td><td>${trucks}</td><td>${lossDisplay}</td><td>${date}</td>
     </tr>
     <tr class="detail-row hidden" id="detail-${s.id}">
-      <td colspan="7">
+      <td colspan="8">
         <div class="detail-panel">${renderDetail(s)}</div>
       </td>
     </tr>`;
 }
 
 function renderDetail(s) {
+  const isEmail = isEmailSource(s);
   let html = '<div class="detail-grid">';
 
-  html += '<div class="detail-section"><h4>Limits Requested</h4><ul>';
+  // Column 1: Source info + Limits
+  html += '<div class="detail-section">';
+  html += '<h4>Source Info</h4><ul>';
+  html += `<li>File: ${escapeHtml(s.sourceFile)}</li>`;
+  if (isEmail) {
+    if (s.emailFrom) html += `<li>From: ${escapeHtml(s.emailFrom)}</li>`;
+    if (s.emailTo) html += `<li>To: ${escapeHtml(s.emailTo)}</li>`;
+  }
+  if (s.insured?.companyName) html += `<li>Insured: ${escapeHtml(s.insured.companyName)}</li>`;
+  if (s.insured?.dotNumber) html += `<li>DOT: ${escapeHtml(s.insured.dotNumber)}</li>`;
+  if (s.insured?.mcNumber) html += `<li>MC: ${escapeHtml(s.insured.mcNumber)}</li>`;
+  if (s.insured?.yearsInBusiness != null) html += `<li>Years in Business: ${s.insured.yearsInBusiness}</li>`;
+  if (s.broker?.contactName) html += `<li>Broker Contact: ${escapeHtml(s.broker.contactName)}</li>`;
+  if (s.broker?.email) html += `<li>Broker Email: ${escapeHtml(s.broker.email)}</li>`;
+  if (s.broker?.phone) html += `<li>Broker Phone: ${escapeHtml(s.broker.phone)}</li>`;
+  html += '</ul>';
+
   if (s.limits?.length) {
+    html += '<h4 style="margin-top:1rem">Limits Requested</h4><ul>';
     s.limits.forEach(l => {
       const parts = [l.lineOfBusiness, l.limitAmount ? `Limit: ${l.limitAmount}` : null, l.deductible ? `Ded: ${l.deductible}` : null, l.description].filter(Boolean);
       html += `<li>${escapeHtml(parts.join(' \u2014 '))}</li>`;
     });
-  } else { html += '<li>No limits data</li>'; }
-  html += '</ul></div>';
+    html += '</ul>';
+  }
+  html += '</div>';
 
+  // Column 2: Exposure details
   html += '<div class="detail-section"><h4>Exposure Details</h4>';
   if (s.exposures) {
     const e = s.exposures;
@@ -438,14 +526,29 @@ function renderDetail(s) {
     if (e.operatingStates?.length) html += `<li>States: ${escapeHtml(e.operatingStates.join(', '))}</li>`;
     if (e.vehicleTypes?.length) html += `<li>Vehicles: ${escapeHtml(e.vehicleTypes.join(', '))}</li>`;
     if (e.annualMileage) html += `<li>Annual Mileage: ${escapeHtml(e.annualMileage)}</li>`;
+    if (e.annualRevenue) html += `<li>Annual Revenue: ${escapeHtml(e.annualRevenue)}</li>`;
     html += '</ul>';
   } else { html += '<p>No exposure data</p>'; }
+
+  if (s.targetPricing?.length) {
+    html += '<h4 style="margin-top:1rem">Target Pricing</h4><ul>';
+    s.targetPricing.forEach(p => {
+      const parts = [p.lineOfBusiness, p.targetPremium ? `Target: ${p.targetPremium}` : null, p.currentPremium ? `Current: ${p.currentPremium}` : null, p.description].filter(Boolean);
+      html += `<li>${escapeHtml(parts.join(' \u2014 '))}</li>`;
+    });
+    html += '</ul>';
+  }
   html += '</div>';
 
+  // Column 3: Loss history
   html += '<div class="detail-section"><h4>Loss History</h4><ul>';
   if (s.losses?.length) {
     s.losses.forEach(l => {
-      const parts = [l.policyYear, `${l.numberOfClaims} claim${l.numberOfClaims === 1 ? '' : 's'}`, l.totalIncurred ? `$${l.totalIncurred} incurred` : null].filter(Boolean);
+      const parts = [];
+      if (l.policyYear) parts.push(l.policyYear);
+      if (l.numberOfClaims != null) parts.push(`${l.numberOfClaims} claim${l.numberOfClaims === 1 ? '' : 's'}`);
+      if (l.totalIncurred) parts.push(`$${l.totalIncurred} incurred`);
+      if (l.totalPaid) parts.push(`$${l.totalPaid} paid`);
       html += `<li>${escapeHtml(parts.join(' \u2014 '))}`;
       if (l.description) html += `<br><span style="color:#5a6580;font-size:0.75rem">${escapeHtml(l.description)}</span>`;
       html += '</li>';
@@ -479,9 +582,19 @@ async function loadSubmissions() {
     const { data } = await fetchJSON(`${API}/submissions?limit=100`);
     allSubmissions = data;
     renderTable(data);
+
+    let totalLosses = 0;
+    let emailCount = 0;
+    let pdfCount = 0;
+    data.forEach(s => {
+      totalLosses += (s.losses?.length || 0);
+      if (isEmailSource(s)) emailCount++; else pdfCount++;
+    });
+    document.getElementById('stat-losses').textContent = totalLosses;
+    document.getElementById('stat-total-detail').textContent = `${emailCount} emails, ${pdfCount} PDFs`;
   } catch (e) {
     document.getElementById('submissionsBody').innerHTML =
-      `<tr><td colspan="7" class="error-msg">Failed to load: ${escapeHtml(e.message)}</td></tr>`;
+      `<tr><td colspan="8" class="error-msg">Failed to load: ${escapeHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -489,7 +602,7 @@ function renderTable(submissions) {
   const tbody = document.getElementById('submissionsBody');
   expandedId = null;
   if (!submissions.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="loading">No submissions found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="loading">No submissions found</td></tr>';
     return;
   }
   tbody.innerHTML = submissions.map(renderRow).join('');
@@ -501,7 +614,8 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
   const filtered = allSubmissions.filter(s => {
     const text = [
       s.insured?.companyName, s.broker?.companyName, s.emailSubject,
-      s.insured?.state, ...(s.linesOfBusiness || []).map(l => l.type)
+      s.insured?.state, s.sourceFile,
+      ...(s.linesOfBusiness || []).map(l => l.type)
     ].filter(Boolean).join(' ').toLowerCase();
     return text.includes(q);
   });

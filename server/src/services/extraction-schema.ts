@@ -45,11 +45,11 @@ export const ExposureInfoSchema = z.object({
   numberOfDrivers: z.number().nullable().describe("Number of drivers"),
   numberOfTrailers: z.number().nullable().describe("Number of trailers"),
   radius: coerceToString.describe("Operating radius, e.g. local, intermediate, long-haul"),
-  commodities: z.array(z.string()).describe("Types of commodities hauled"),
+  commodities: z.array(z.string()).nullable().transform((v) => v ?? []).describe("Types of commodities hauled"),
   annualRevenue: coerceToString.describe("Annual revenue"),
   annualMileage: coerceToString.describe("Annual mileage"),
-  operatingStates: z.array(z.string()).describe("States of operation"),
-  vehicleTypes: z.array(z.string()).describe("Types of vehicles in the fleet"),
+  operatingStates: z.array(z.string()).nullable().transform((v) => v ?? []).describe("States of operation"),
+  vehicleTypes: z.array(z.string()).nullable().transform((v) => v ?? []).describe("Types of vehicles in the fleet"),
 });
 
 export const LossRecordSchema = z.object({
