@@ -35,6 +35,16 @@ services:
     volumes:
       - ./Emails Round:/app/emails:ro
 
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    depends_on:
+      - server
+
   preview:
     build:
       context: .
