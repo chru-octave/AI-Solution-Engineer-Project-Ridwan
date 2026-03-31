@@ -1,12 +1,22 @@
 import * as path from "path";
-import { ingestAllEmails } from "../services/ingestion";
+import { ingestAllEmails, type ExtractionMode } from "../services/ingestion";
 
 async function main() {
+  const args = process.argv.slice(2);
+  const thorough = args.includes("--thorough");
+  const mode: ExtractionMode = thorough ? "thorough" : "standard";
+  const dirArgs = args.filter((a) => !a.startsWith("--"));
+
   const emailDir =
-    process.argv[2] || path.resolve(__dirname, "../../../Emails Round");
+    dirArgs[0] || path.resolve(__dirname, "../../../Emails Round");
 
   console.log(`Starting ingestion from: ${emailDir}`);
-  const results = await ingestAllEmails(emailDir);
+  console.log(`Extraction mode: ${mode}`);
+  if (thorough) {
+    console.log(`  (thorough mode uses an extra LLM call to merge multi-section extractions)\n`);
+  }
+
+  const results = await ingestAllEmails(emailDir, mode);
 
   const success = results.filter((r) => r.status === "success").length;
   const skipped = results.filter((r) => r.status === "skipped").length;

@@ -67,3 +67,52 @@ export async function extractSubmissionData(
   const raw = await extractRawSubmissionData(emailContent);
   return SubmissionExtractionSchema.parse(raw);
 }
+
+const MERGE_SYSTEM_PROMPT = `You are an expert insurance data merging assistant. You will receive multiple partial JSON extractions from different sections of the same insurance submission (e.g. email body, PDF attachments, loss runs).
+
+Your job is to merge them into a single unified extraction using EXACTLY these JSON keys:
+
+{
+  "insured": { "companyName", "contactName", "mailingAddress", "dotNumber", "mcNumber", "yearsInBusiness", "state" },
+  "broker": { "companyName", "contactName", "email", "phone" },
+  "linesOfBusiness": [{ "type" }],
+  "limits": [{ "lineOfBusiness", "limitAmount", "deductible", "description" }],
+  "targetPricing": [{ "lineOfBusiness", "targetPremium", "currentPremium", "description" }],
+  "exposures": { "numberOfTrucks", "numberOfDrivers", "numberOfTrailers", "radius", "commodities": ["string"], "annualRevenue", "annualMileage", "operatingStates": ["string"], "vehicleTypes": ["string"] },
+  "losses": [{ "policyYear", "numberOfClaims", "totalIncurred", "totalPaid", "description" }]
+}
+
+Merge rules:
+- For singular objects (insured, broker, exposures): combine fields from all sources. When the same field has different non-null values, prefer the most specific/complete value.
+- For arrays (losses, limits, linesOfBusiness, targetPricing): include all unique entries. Deduplicate semantically — if two sources describe the same loss year or same limit, merge them into one entry with the most complete data.
+- Use null for fields where no source provides data.
+- Do NOT invent data.
+- Return ONLY valid JSON. No markdown fencing, no explanation, no preamble.`;
+
+export async function mergeExtractionsViaLLM(
+  partials: Record<string, unknown>[]
+): Promise<SubmissionExtraction> {
+  const partialsJson = partials
+    .map((p, i) => `--- Partial extraction #${i + 1} ---\n${JSON.stringify(p, null, 2)}`)
+    .join("\n\n");
+
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: `Merge the following ${partials.length} partial insurance submission extractions into a single unified extraction. Return ONLY valid JSON.\n\n${partialsJson}`,
+      },
+    ],
+    system: MERGE_SYSTEM_PROMPT,
+  });
+
+  const textBlock = message.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text response from Anthropic during merge");
+  }
+
+  const raw = parseJsonResponse(textBlock.text);
+  return SubmissionExtractionSchema.parse(raw);
+}

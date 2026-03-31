@@ -1,8 +1,23 @@
 import * as fs from "fs";
 import * as path from "path";
 import { prisma } from "../lib/prisma";
-import { parseEmlFile, buildContentString, parsePdfFile, buildPdfContentString } from "./email-parser";
-import { extractSubmissionData } from "./anthropic";
+import {
+  parseEmlFile,
+  parsePdfFile,
+  splitEmailIntoSections,
+  splitPdfIntoSections,
+  type ContentSection,
+  type ParsedEmail,
+} from "./email-parser";
+import {
+  extractSubmissionData,
+  extractRawSubmissionData,
+  mergeExtractionsViaLLM,
+} from "./anthropic";
+import { mergeExtractions } from "./extraction-merge";
+import type { SubmissionExtraction } from "./extraction-schema";
+
+export type ExtractionMode = "standard" | "thorough";
 
 const INGESTABLE_EXTENSIONS = [".eml", ".pdf"];
 
@@ -32,8 +47,99 @@ export function collectIngestableFiles(dir: string): string[] {
   return results;
 }
 
+async function extractFromSections(
+  sections: ContentSection[],
+  mode: ExtractionMode,
+  fileName: string
+): Promise<SubmissionExtraction> {
+  if (sections.length === 0) {
+    return {
+      insured: null,
+      broker: null,
+      linesOfBusiness: [],
+      limits: [],
+      targetPricing: [],
+      exposures: null,
+      losses: [],
+    };
+  }
+
+  if (sections.length === 1) {
+    console.log(`  Single section — extracting directly`);
+    return extractSubmissionData(sections[0].content);
+  }
+
+  console.log(`  ${sections.length} sections detected (mode: ${mode})`);
+  for (const s of sections) {
+    console.log(`    • ${s.label} (${s.content.length} chars)`);
+  }
+
+  if (mode === "thorough") {
+    const partials: Record<string, unknown>[] = [];
+    for (let i = 0; i < sections.length; i++) {
+      console.log(`  [map ${i + 1}/${sections.length}] Extracting: ${sections[i].label}`);
+      const raw = await extractRawSubmissionData(sections[i].content);
+      partials.push(raw);
+    }
+    console.log(`  [reduce] Merging ${partials.length} extractions via LLM for: ${fileName}`);
+    return mergeExtractionsViaLLM(partials);
+  }
+
+  const partials: SubmissionExtraction[] = [];
+  for (let i = 0; i < sections.length; i++) {
+    console.log(`  [map ${i + 1}/${sections.length}] Extracting: ${sections[i].label}`);
+    const extracted = await extractSubmissionData(sections[i].content);
+    partials.push(extracted);
+  }
+  console.log(`  Merging ${partials.length} extractions programmatically for: ${fileName}`);
+  return mergeExtractions(partials);
+}
+
+function buildSubmissionCreateData(
+  fileName: string,
+  extracted: SubmissionExtraction,
+  emailMeta?: { parsed: ParsedEmail }
+) {
+  return {
+    sourceFile: fileName,
+    emailFrom: emailMeta?.parsed.from,
+    emailTo: emailMeta?.parsed.to,
+    emailSubject: emailMeta?.parsed.subject,
+    emailDate: emailMeta?.parsed.date,
+    rawBody: emailMeta
+      ? (emailMeta.parsed.textBody || emailMeta.parsed.htmlBody || null)
+      : null,
+    insured: extracted.insured
+      ? { create: extracted.insured }
+      : undefined,
+    broker: extracted.broker
+      ? { create: extracted.broker }
+      : undefined,
+    linesOfBusiness:
+      extracted.linesOfBusiness.length > 0
+        ? { create: extracted.linesOfBusiness }
+        : undefined,
+    limits:
+      extracted.limits.length > 0
+        ? { create: extracted.limits }
+        : undefined,
+    targetPricing:
+      extracted.targetPricing.length > 0
+        ? { create: extracted.targetPricing }
+        : undefined,
+    exposures: extracted.exposures
+      ? { create: extracted.exposures }
+      : undefined,
+    losses:
+      extracted.losses.length > 0
+        ? { create: extracted.losses }
+        : undefined,
+  };
+}
+
 export async function ingestSingleEmail(
-  filePath: string
+  filePath: string,
+  mode: ExtractionMode = "standard"
 ): Promise<IngestionResult> {
   const fileName = path.basename(filePath);
 
@@ -47,45 +153,13 @@ export async function ingestSingleEmail(
 
   console.log(`Parsing: ${fileName}`);
   const parsed = await parseEmlFile(filePath);
-  const emailContent = buildContentString(parsed);
+  const sections = splitEmailIntoSections(parsed);
 
   console.log(`Extracting data via Anthropic for: ${fileName}`);
-  const extracted = await extractSubmissionData(emailContent);
+  const extracted = await extractFromSections(sections, mode, fileName);
 
   const submission = await prisma.submission.create({
-    data: {
-      sourceFile: fileName,
-      emailFrom: parsed.from,
-      emailTo: parsed.to,
-      emailSubject: parsed.subject,
-      emailDate: parsed.date,
-      rawBody: parsed.textBody || parsed.htmlBody || null,
-      insured: extracted.insured
-        ? { create: extracted.insured }
-        : undefined,
-      broker: extracted.broker
-        ? { create: extracted.broker }
-        : undefined,
-      linesOfBusiness:
-        extracted.linesOfBusiness.length > 0
-          ? { create: extracted.linesOfBusiness }
-          : undefined,
-      limits:
-        extracted.limits.length > 0
-          ? { create: extracted.limits }
-          : undefined,
-      targetPricing:
-        extracted.targetPricing.length > 0
-          ? { create: extracted.targetPricing }
-          : undefined,
-      exposures: extracted.exposures
-        ? { create: extracted.exposures }
-        : undefined,
-      losses:
-        extracted.losses.length > 0
-          ? { create: extracted.losses }
-          : undefined,
-    },
+    data: buildSubmissionCreateData(fileName, extracted, { parsed }),
   });
 
   console.log(`Stored submission: ${submission.id} (${fileName})`);
@@ -93,7 +167,8 @@ export async function ingestSingleEmail(
 }
 
 export async function ingestSinglePdf(
-  filePath: string
+  filePath: string,
+  mode: ExtractionMode = "standard"
 ): Promise<IngestionResult> {
   const fileName = path.basename(filePath);
 
@@ -107,41 +182,13 @@ export async function ingestSinglePdf(
 
   console.log(`Parsing PDF: ${fileName}`);
   const parsed = await parsePdfFile(filePath);
-  const pdfContent = buildPdfContentString(parsed);
+  const sections = splitPdfIntoSections(parsed);
 
   console.log(`Extracting data via Anthropic for: ${fileName}`);
-  const extracted = await extractSubmissionData(pdfContent);
+  const extracted = await extractFromSections(sections, mode, fileName);
 
   const submission = await prisma.submission.create({
-    data: {
-      sourceFile: fileName,
-      rawBody: parsed.text || null,
-      insured: extracted.insured
-        ? { create: extracted.insured }
-        : undefined,
-      broker: extracted.broker
-        ? { create: extracted.broker }
-        : undefined,
-      linesOfBusiness:
-        extracted.linesOfBusiness.length > 0
-          ? { create: extracted.linesOfBusiness }
-          : undefined,
-      limits:
-        extracted.limits.length > 0
-          ? { create: extracted.limits }
-          : undefined,
-      targetPricing:
-        extracted.targetPricing.length > 0
-          ? { create: extracted.targetPricing }
-          : undefined,
-      exposures: extracted.exposures
-        ? { create: extracted.exposures }
-        : undefined,
-      losses:
-        extracted.losses.length > 0
-          ? { create: extracted.losses }
-          : undefined,
-    },
+    data: buildSubmissionCreateData(fileName, extracted),
   });
 
   console.log(`Stored submission: ${submission.id} (${fileName})`);
@@ -149,7 +196,8 @@ export async function ingestSinglePdf(
 }
 
 export async function ingestAllEmails(
-  emailDir: string
+  emailDir: string,
+  mode: ExtractionMode = "standard"
 ): Promise<IngestionResult[]> {
   if (!fs.existsSync(emailDir)) {
     throw new Error(`Email directory not found: ${emailDir}`);
@@ -159,6 +207,7 @@ export async function ingestAllEmails(
   const emlCount = files.filter((f) => f.endsWith(".eml")).length;
   const pdfCount = files.filter((f) => f.endsWith(".pdf")).length;
   console.log(`Found ${files.length} ingestable files in ${emailDir} (${emlCount} .eml, ${pdfCount} .pdf)`);
+  console.log(`Extraction mode: ${mode}`);
 
   const results: IngestionResult[] = [];
 
@@ -166,8 +215,8 @@ export async function ingestAllEmails(
     try {
       const ext = path.extname(filePath).toLowerCase();
       const result = ext === ".pdf"
-        ? await ingestSinglePdf(filePath)
-        : await ingestSingleEmail(filePath);
+        ? await ingestSinglePdf(filePath, mode)
+        : await ingestSingleEmail(filePath, mode);
       results.push(result);
     } catch (err) {
       const fileName = path.basename(filePath);

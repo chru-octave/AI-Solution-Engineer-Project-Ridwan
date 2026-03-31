@@ -99,27 +99,90 @@ export async function parsePdfFile(filePath: string): Promise<ParsedPdf> {
   };
 }
 
-const MAX_CONTENT_CHARS = 180_000;
+export interface ContentSection {
+  label: string;
+  content: string;
+}
+
+const MAX_SECTION_CHARS = 180_000;
+
+function capContent(content: string): string {
+  if (content.length > MAX_SECTION_CHARS) {
+    return content.slice(0, MAX_SECTION_CHARS) + "\n\n[... TRUNCATED — content exceeded context limit ...]";
+  }
+  return content;
+}
+
+export function splitEmailIntoSections(parsed: ParsedEmail): ContentSection[] {
+  const sections: ContentSection[] = [];
+
+  const bodyText = parsed.textBody || parsed.htmlBody || "";
+  if (bodyText.length > 0) {
+    const bodyContent = [
+      `From: ${parsed.from || "unknown"}`,
+      `To: ${parsed.to || "unknown"}`,
+      `Subject: ${parsed.subject || "unknown"}`,
+      `Date: ${parsed.date?.toISOString() || "unknown"}`,
+      "",
+      "=== EMAIL BODY ===",
+      bodyText,
+    ].join("\n");
+
+    sections.push({
+      label: "email body",
+      content: capContent(bodyContent),
+    });
+  }
+
+  for (const att of parsed.attachments) {
+    if (!att.text) continue;
+
+    const attContent = [
+      `Source: attachment from email "${parsed.subject || "unknown"}"`,
+      `Filename: ${att.filename} (${att.contentType}, ${att.size} bytes)`,
+      "",
+      "=== ATTACHMENT CONTENT ===",
+      att.text,
+    ].join("\n");
+
+    sections.push({
+      label: `attachment: ${att.filename}`,
+      content: capContent(attContent),
+    });
+  }
+
+  return sections;
+}
+
+export function splitPdfIntoSections(parsed: ParsedPdf): ContentSection[] {
+  if (!parsed.text) return [];
+
+  const content = [
+    `Source Document: ${parsed.filename} (${parsed.size} bytes)`,
+    "",
+    "=== PDF CONTENT ===",
+    parsed.text,
+  ].join("\n");
+
+  return [{
+    label: `pdf: ${parsed.filename}`,
+    content: capContent(content),
+  }];
+}
 
 export function buildPdfContentString(parsed: ParsedPdf): string {
-  const sections: string[] = [
+  const content = [
     `Source Document: ${parsed.filename} (${parsed.size} bytes)`,
     "",
     "=== PDF CONTENT ===",
     parsed.text || "[empty document]",
-  ];
+  ].join("\n");
 
-  let content = sections.join("\n");
-
-  if (content.length > MAX_CONTENT_CHARS) {
-    content = content.slice(0, MAX_CONTENT_CHARS) + "\n\n[... TRUNCATED — content exceeded context limit ...]";
-  }
-
-  return content;
+  return capContent(content);
 }
 
 export function buildContentString(parsed: ParsedEmail): string {
-  const sections: string[] = [
+  const parts: string[] = [
     `From: ${parsed.from || "unknown"}`,
     `To: ${parsed.to || "unknown"}`,
     `Subject: ${parsed.subject || "unknown"}`,
@@ -130,20 +193,14 @@ export function buildContentString(parsed: ParsedEmail): string {
   ];
 
   for (const att of parsed.attachments) {
-    sections.push("");
-    sections.push(`=== ATTACHMENT: ${att.filename} (${att.contentType}, ${att.size} bytes) ===`);
+    parts.push("");
+    parts.push(`=== ATTACHMENT: ${att.filename} (${att.contentType}, ${att.size} bytes) ===`);
     if (att.text) {
-      sections.push(att.text);
+      parts.push(att.text);
     } else {
-      sections.push(`[binary attachment — not extracted]`);
+      parts.push(`[binary attachment — not extracted]`);
     }
   }
 
-  let content = sections.join("\n");
-
-  if (content.length > MAX_CONTENT_CHARS) {
-    content = content.slice(0, MAX_CONTENT_CHARS) + "\n\n[... TRUNCATED — content exceeded context limit ...]";
-  }
-
-  return content;
+  return capContent(parts.join("\n"));
 }
