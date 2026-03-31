@@ -26,7 +26,7 @@ The `Emails/` and `Emails Round/` folders contain the submission emails to be us
 
 ## Data to Focus On
 
-- Line(s) of business
+- prisma
 - Limits requested
 - Target pricing
 - Exposure information (trucks, drivers, etc.)
@@ -53,4 +53,4 @@ When complete, upload your solution to this repository. A walkthrough and live d
 
 A code review will be conducted prior to the demo session.
 
-For API key issues, contact: cbrar@octavegroup.com
+For API key issues, contact: [cbrar@octavegroup.com](mailto:cbrar@octavegroup.com)

@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Submission {
+  id           String    @id @default(cuid())
+  sourceFile   String    @unique
+  emailFrom    String?
+  emailTo      String?
+  emailSubject String?
+  emailDate    DateTime?
+  rawBody      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  insured         InsuredInfo?
+  broker          BrokerInfo?
+  linesOfBusiness LineOfBusiness[]
+  limits          LimitRequested[]
+  targetPricing   TargetPricing[]
+  exposures       ExposureInfo?
+  losses          LossRecord[]
+
+  @@map("submissions")
+}
+
+model InsuredInfo {
+  id              String  @id @default(cuid())
+  companyName     String?
+  contactName     String?
+  mailingAddress  String?
+  dotNumber       String?
+  mcNumber        String?
+  yearsInBusiness Int?
+  state           String?
+
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("insured_info")
+}
+
+model BrokerInfo {
+  id          String  @id @default(cuid())
+  companyName String?
+  contactName String?
+  email       String?
+  phone       String?
+
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("broker_info")
+}
+
+model LineOfBusiness {
+  id   String @id @default(cuid())
+  type String
+
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("lines_of_business")
+}
+
+model LimitRequested {
+  id             String  @id @default(cuid())
+  lineOfBusiness String?
+  limitAmount    String?
+  deductible     String?
+  description    String?
+
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("limits_requested")
+}
+
+model TargetPricing {
+  id             String  @id @default(cuid())
+  lineOfBusiness String?
+  targetPremium  String?
+  currentPremium String?
+  description    String?
+
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("target_pricing")
+}
+
+model ExposureInfo {
+  id               String   @id @default(cuid())
+  numberOfTrucks   Int?
+  numberOfDrivers  Int?
+  numberOfTrailers Int?
+  radius           String?
+  commodities      String[]
+  annualRevenue    String?
+  annualMileage    String?
+  operatingStates  String[]
+  vehicleTypes     String[]
+
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("exposure_info")
+}
+
+model LossRecord {
+  id             String  @id @default(cuid())
+  policyYear     String?
+  numberOfClaims Int?
+  totalIncurred  String?
+  totalPaid      String?
+  description    String?
+
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("loss_records")
+}

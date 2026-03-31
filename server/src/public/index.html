@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Octave Insurance — Submissions Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0c0f14;
+  --surface: #161b24;
+  --surface2: #1c2230;
+  --border: #2a3142;
+  --text: #e4e8ef;
+  --text2: #8893a7;
+  --accent: #e8a838;
+  --accent2: #38b2e8;
+  --red: #e84a5f;
+  --green: #4ae88a;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 2rem 2.5rem;
+}
+
+h1, h2, h3 {
+  font-family: 'DM Serif Display', serif;
+  font-weight: 400;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.header h1 {
+  font-size: 2rem;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.header .subtitle {
+  color: var(--text2);
+  font-size: 0.85rem;
+  font-weight: 300;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 3px; height: 100%;
+}
+
+.stat-card:nth-child(1)::after { background: var(--accent); }
+.stat-card:nth-child(2)::after { background: var(--accent2); }
+.stat-card:nth-child(3)::after { background: var(--green); }
+.stat-card:nth-child(4)::after { background: var(--red); }
+
+.stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text2);
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-family: 'DM Serif Display', serif;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.chart-card h3 {
+  font-size: 1rem;
+  color: var(--text2);
+  margin-bottom: 1rem;
+}
+
+.chart-card canvas { max-height: 280px; }
+
+.table-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-header h2 { font-size: 1.1rem; }
+
+.search-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.5rem 1rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  width: 280px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--text2); }
+
+table { width: 100%; border-collapse: collapse; }
+
+thead th {
+  text-align: left;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text2);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+tbody tr.data-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+tbody tr.data-row:hover { background: var(--surface2); }
+
+tbody td {
+  padding: 0.85rem 1.5rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.tag {
+  display: inline-block;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  margin: 0.1rem 0.15rem;
+  color: var(--accent2);
+  white-space: nowrap;
+}
+
+.detail-panel {
+  background: var(--surface2);
+  padding: 1.5rem 2rem;
+  border-left: 3px solid var(--accent);
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+.detail-section h4 {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.detail-section p,
+.detail-section li {
+  font-size: 0.8rem;
+  color: var(--text2);
+  line-height: 1.7;
+}
+
+.detail-section ul {
+  list-style: none;
+  padding: 0;
+}
+
+.detail-section ul li::before {
+  content: '\2022';
+  color: var(--accent);
+  margin-right: 0.5rem;
+}
+
+.loading {
+  color: var(--text2);
+  text-align: center;
+  padding: 4rem;
+  font-size: 0.9rem;
+}
+
+.error-msg {
+  color: var(--red);
+  text-align: center;
+  padding: 2rem;
+}
+
+.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Octave Insurance</h1>
+  <span class="subtitle">Submission Data Dashboard</span>
+</div>
+
+<div class="stats-row" id="stats">
+  <div class="stat-card"><div class="stat-label">Total Submissions</div><div class="stat-value" id="stat-total">--</div></div>
+  <div class="stat-card"><div class="stat-label">Lines of Business</div><div class="stat-value" id="stat-lob">--</div></div>
+  <div class="stat-card"><div class="stat-label">Brokers</div><div class="stat-value" id="stat-brokers">--</div></div>
+  <div class="stat-card"><div class="stat-label">Total Fleet Units</div><div class="stat-value" id="stat-fleet">--</div></div>
+</div>
+
+<div class="charts-row">
+  <div class="chart-card">
+    <h3>Fleet Size by Submission</h3>
+    <canvas id="fleetChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>Lines of Business Distribution</h3>
+    <canvas id="lobChart"></canvas>
+  </div>
+</div>
+
+<div class="table-section">
+  <div class="table-header">
+    <h2>All Submissions</h2>
+    <input class="search-input" id="searchInput" placeholder="Search insured, broker, state, line..." />
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Insured</th>
+        <th>Broker</th>
+        <th>State</th>
+        <th>Lines of Business</th>
+        <th>Fleet</th>
+        <th>Drivers</th>
+        <th>Date</th>
+      </tr>
+    </thead>
+    <tbody id="submissionsBody">
+      <tr><td colspan="7" class="loading">Loading submissions...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const API = window.location.origin + '/api';
+
+let allSubmissions = [];
+let expandedId = null;
+
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+async function loadSummary() {
+  const { data } = await fetchJSON(`${API}/analytics/summary`);
+  document.getElementById('stat-total').textContent = data.totalSubmissions;
+  document.getElementById('stat-lob').textContent = data.linesOfBusiness.length;
+  document.getElementById('stat-brokers').textContent = data.brokers.length;
+  return data;
+}
+
+async function loadExposures() {
+  const { data } = await fetchJSON(`${API}/analytics/exposures`);
+  let totalFleet = 0;
+  const labels = [];
+  const trucks = [];
+  const drivers = [];
+
+  data.forEach(exp => {
+    const name = exp.submission?.insured?.companyName || exp.submission?.emailSubject || 'Unknown';
+    labels.push(name.length > 22 ? name.slice(0, 22) + '\u2026' : name);
+    trucks.push(exp.numberOfTrucks || 0);
+    drivers.push(exp.numberOfDrivers || 0);
+    totalFleet += (exp.numberOfTrucks || 0);
+  });
+
+  document.getElementById('stat-fleet').textContent = totalFleet;
+
+  new Chart(document.getElementById('fleetChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Trucks', data: trucks, backgroundColor: '#e8a838', borderRadius: 4 },
+        { label: 'Drivers', data: drivers, backgroundColor: '#38b2e8', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#8893a7', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#8893a7', font: { size: 10 } }, grid: { color: '#1c2230' } },
+        y: { ticks: { color: '#8893a7' }, grid: { color: '#1c2230' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+async function loadLOBChart(summaryData) {
+  const lob = summaryData.linesOfBusiness;
+  const colors = ['#e8a838','#38b2e8','#4ae88a','#e84a5f','#a87ee8','#e8d838','#38e8c8','#e87838','#8838e8'];
+
+  new Chart(document.getElementById('lobChart'), {
+    type: 'doughnut',
+    data: {
+      labels: lob.map(l => l.type),
+      datasets: [{
+        data: lob.map(l => l.count),
+        backgroundColor: colors.slice(0, lob.length),
+        borderColor: '#161b24',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color: '#8893a7', font: { size: 11 }, padding: 10, boxWidth: 12 }
+        }
+      }
+    }
+  });
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function renderRow(s) {
+  const insured = escapeHtml(s.insured?.companyName || '\u2014');
+  const broker = escapeHtml(s.broker?.companyName || '\u2014');
+  const state = escapeHtml(s.insured?.state || '\u2014');
+  const lobs = (s.linesOfBusiness || []).map(l => `<span class="tag">${escapeHtml(l.type)}</span>`).join('');
+  const trucks = s.exposures?.numberOfTrucks ?? '\u2014';
+  const drivers = s.exposures?.numberOfDrivers ?? '\u2014';
+  const date = s.emailDate ? new Date(s.emailDate).toLocaleDateString() : '\u2014';
+
+  return `
+    <tr class="data-row" data-id="${s.id}" onclick="toggleDetail('${s.id}')">
+      <td>${insured}</td><td>${broker}</td><td>${state}</td>
+      <td>${lobs}</td><td>${trucks}</td><td>${drivers}</td><td>${date}</td>
+    </tr>
+    <tr class="detail-row hidden" id="detail-${s.id}">
+      <td colspan="7">
+        <div class="detail-panel">${renderDetail(s)}</div>
+      </td>
+    </tr>`;
+}
+
+function renderDetail(s) {
+  let html = '<div class="detail-grid">';
+
+  html += '<div class="detail-section"><h4>Limits Requested</h4><ul>';
+  if (s.limits?.length) {
+    s.limits.forEach(l => {
+      const parts = [l.lineOfBusiness, l.limitAmount ? `Limit: ${l.limitAmount}` : null, l.deductible ? `Ded: ${l.deductible}` : null, l.description].filter(Boolean);
+      html += `<li>${escapeHtml(parts.join(' \u2014 '))}</li>`;
+    });
+  } else { html += '<li>No limits data</li>'; }
+  html += '</ul></div>';
+
+  html += '<div class="detail-section"><h4>Exposure Details</h4>';
+  if (s.exposures) {
+    const e = s.exposures;
+    html += '<ul>';
+    if (e.numberOfTrucks != null) html += `<li>Trucks: ${e.numberOfTrucks}</li>`;
+    if (e.numberOfDrivers != null) html += `<li>Drivers: ${e.numberOfDrivers}</li>`;
+    if (e.numberOfTrailers != null) html += `<li>Trailers: ${e.numberOfTrailers}</li>`;
+    if (e.radius) html += `<li>Radius: ${escapeHtml(e.radius)}</li>`;
+    if (e.commodities?.length) html += `<li>Commodities: ${escapeHtml(e.commodities.join(', '))}</li>`;
+    if (e.operatingStates?.length) html += `<li>States: ${escapeHtml(e.operatingStates.join(', '))}</li>`;
+    if (e.vehicleTypes?.length) html += `<li>Vehicles: ${escapeHtml(e.vehicleTypes.join(', '))}</li>`;
+    if (e.annualMileage) html += `<li>Annual Mileage: ${escapeHtml(e.annualMileage)}</li>`;
+    html += '</ul>';
+  } else { html += '<p>No exposure data</p>'; }
+  html += '</div>';
+
+  html += '<div class="detail-section"><h4>Loss History</h4><ul>';
+  if (s.losses?.length) {
+    s.losses.forEach(l => {
+      const parts = [l.policyYear, `${l.numberOfClaims} claim${l.numberOfClaims === 1 ? '' : 's'}`, l.totalIncurred ? `$${l.totalIncurred} incurred` : null].filter(Boolean);
+      html += `<li>${escapeHtml(parts.join(' \u2014 '))}`;
+      if (l.description) html += `<br><span style="color:#5a6580;font-size:0.75rem">${escapeHtml(l.description)}</span>`;
+      html += '</li>';
+    });
+  } else { html += '<li>No loss data available</li>'; }
+  html += '</ul></div>';
+
+  html += '</div>';
+  return html;
+}
+
+function toggleDetail(id) {
+  const row = document.getElementById(`detail-${id}`);
+  if (!row) return;
+
+  if (expandedId === id) {
+    row.classList.add('hidden');
+    expandedId = null;
+  } else {
+    if (expandedId) {
+      const prev = document.getElementById(`detail-${expandedId}`);
+      if (prev) prev.classList.add('hidden');
+    }
+    row.classList.remove('hidden');
+    expandedId = id;
+  }
+}
+
+async function loadSubmissions() {
+  try {
+    const { data } = await fetchJSON(`${API}/submissions?limit=100`);
+    allSubmissions = data;
+    renderTable(data);
+  } catch (e) {
+    document.getElementById('submissionsBody').innerHTML =
+      `<tr><td colspan="7" class="error-msg">Failed to load: ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+function renderTable(submissions) {
+  const tbody = document.getElementById('submissionsBody');
+  expandedId = null;
+  if (!submissions.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">No submissions found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = submissions.map(renderRow).join('');
+}
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase().trim();
+  if (!q) { renderTable(allSubmissions); return; }
+  const filtered = allSubmissions.filter(s => {
+    const text = [
+      s.insured?.companyName, s.broker?.companyName, s.emailSubject,
+      s.insured?.state, ...(s.linesOfBusiness || []).map(l => l.type)
+    ].filter(Boolean).join(' ').toLowerCase();
+    return text.includes(q);
+  });
+  renderTable(filtered);
+});
+
+(async () => {
+  try {
+    const [summaryData] = await Promise.all([loadSummary(), loadExposures(), loadSubmissions()]);
+    await loadLOBChart(summaryData);
+  } catch (e) {
+    console.error('Dashboard init failed:', e);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: octave
+      POSTGRES_PASSWORD: octave_secret
+      POSTGRES_DB: octave_insurance
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U octave -d octave_insurance"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://octave:octave_secret@db:5432/octave_insurance?schema=public
+      PORT: "3000"
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./Emails Round:/app/emails:ro
+
+  preview:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    profiles: ["preview"]
+    env_file:
+      - .env
+    volumes:
+      - ./Emails Round:/app/emails:ro
+    entrypoint: ["node", "dist/scripts/preview.js"]
+    command: ["/app/emails"]
+
+volumes:
+  pgdata:
