@@ -3,7 +3,6 @@ import {
   Pie,
   Cell,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 
@@ -22,40 +21,52 @@ export default function LobChart({ linesOfBusiness }: LobChartProps) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <PieChart>
-        <Pie
-          data={linesOfBusiness}
-          dataKey="count"
-          nameKey="type"
-          cx="40%"
-          cy="50%"
-          innerRadius={55}
-          outerRadius={110}
-          paddingAngle={2}
-          stroke="#161b24"
-          strokeWidth={2}
-        >
-          {linesOfBusiness.map((_, i) => (
-            <Cell key={i} fill={COLORS[i % COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip
-          contentStyle={{
-            background: "#1c2230",
-            border: "1px solid #2a3142",
-            borderRadius: 6,
-            color: "#e4e8ef",
-            fontSize: 12,
-          }}
-        />
-        <Legend
-          layout="vertical"
-          align="right"
-          verticalAlign="middle"
-          wrapperStyle={{ fontSize: 11, color: "#8893a7", paddingLeft: 10 }}
-        />
-      </PieChart>
-    </ResponsiveContainer>
+    <div>
+      <ResponsiveContainer width="100%" height={220}>
+        <PieChart>
+          <Pie
+            data={linesOfBusiness}
+            dataKey="count"
+            nameKey="type"
+            cx="50%"
+            cy="50%"
+            innerRadius={50}
+            outerRadius={100}
+            paddingAngle={2}
+            stroke="#161b24"
+            strokeWidth={2}
+          >
+            {linesOfBusiness.map((_, i) => (
+              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            contentStyle={{
+              background: "#1c2230",
+              border: "1px solid #2a3142",
+              borderRadius: 6,
+              color: "#e4e8ef",
+              fontSize: 12,
+            }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 max-h-40 overflow-y-auto">
+        {linesOfBusiness.map((item, i) => (
+          <div key={item.type} className="flex items-center gap-2 min-w-0">
+            <span
+              className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+              style={{ background: COLORS[i % COLORS.length] }}
+            />
+            <span className="text-[0.7rem] text-muted truncate">
+              {item.type}
+            </span>
+            <span className="text-[0.65rem] text-light ml-auto flex-shrink-0">
+              {item.count}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
