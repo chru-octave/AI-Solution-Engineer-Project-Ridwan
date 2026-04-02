@@ -57,3 +57,9 @@ export function useIngest() {
     },
   });
 }
+
+export function useUpload() {
+  return useMutation({
+    mutationFn: (files: File[]) => api.uploadFiles(files),
+  });
+}

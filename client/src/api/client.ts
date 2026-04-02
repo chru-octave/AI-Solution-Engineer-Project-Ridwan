@@ -53,4 +53,18 @@ export const api = {
         mode: mode || "standard",
       }),
     }),
+
+  uploadFiles: async (files: File[]) => {
+    const formData = new FormData();
+    files.forEach((f) => formData.append("files", f));
+    const res = await fetch(`${API_BASE}/ingest/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json() as Promise<{
+      uploaded: { filename: string; size: number }[];
+      uploadDir: string;
+    }>;
+  },
 };
