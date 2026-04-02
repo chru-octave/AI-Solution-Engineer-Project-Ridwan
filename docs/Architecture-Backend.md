@@ -164,6 +164,12 @@ All monetary/measurement fields are stored as **strings** because they arrive fr
 
 ## REST API
 
+### Health
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Liveness check — returns `{ status, timestamp }` |
+
 ### Submissions
 
 | Method | Endpoint | Description |
@@ -186,7 +192,10 @@ Query params for list: `search`, `lineOfBusiness`, `page`, `limit`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `POST` | `/api/ingest/upload` | Multipart file upload (field `files`, up to 50 files, `.eml`/`.pdf` only, 50 MB max per file). Writes to `UPLOAD_DIR` and returns `{ uploaded, uploadDir }` |
 | `POST` | `/api/ingest/trigger` | Trigger ingestion. Body: `{ emailDir, mode }` |
+
+The upload endpoint uses `multer` with disk storage. Files are written to `UPLOAD_DIR` (defaults to `/app/uploads`), preserving original filenames. Only `.eml` and `.pdf` extensions are accepted; all others are rejected with an error.
 
 ---
 
@@ -198,6 +207,7 @@ Query params for list: `search`, `lineOfBusiness`, `page`, `limit`
 | `@prisma/client` | PostgreSQL ORM |
 | `@anthropic-ai/sdk` | Claude API for data extraction |
 | `mailparser` | `.eml` file parsing (MIME, attachments) |
+| `multer` | Multipart file upload handling (`.eml`/`.pdf` uploads) |
 | `pdf-parse` | PDF text extraction |
 | `zod` | Runtime schema validation for LLM output |
 | `cors` | Cross-origin requests from frontend |
@@ -209,7 +219,9 @@ Query params for list: `search`, `lineOfBusiness`, `page`, `limit`
 **Image:** `node:20-alpine`  
 **Build steps:** Install deps → Prisma generate → TypeScript compile → Copy static assets  
 **Startup:** `prisma migrate deploy` (applies pending migrations) → `node dist/index.js`  
-**Volume mount:** `./Emails Round:/app/emails:ro` (read-only email directory)
+**Volume mounts:**
+- `./Emails Round:/app/emails:ro` — read-only email directory for directory-based ingestion
+- `uploads:/app/uploads` — named Docker volume for files received via the upload API
 
 ---
 

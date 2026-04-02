@@ -78,7 +78,7 @@ React Router v7 with a shared layout:
 |-------|------|-------------|
 | `/` | `Dashboard` | Stat cards, fleet bar chart, LOB doughnut chart, paginated submissions table |
 | `/submissions/:id` | `SubmissionDetail` | Full view: source info, insured, broker, exposures, limits, pricing, losses |
-| `/ingest` | `IngestPage` | Directory input, mode selector, trigger button, results display |
+| `/ingest` | `IngestPage` | File upload (drag-and-drop), directory ingestion trigger, results display |
 
 All routes are nested under `AppLayout`, which provides the persistent sidebar navigation and scrollable main content area.
 
@@ -98,6 +98,7 @@ A thin `fetch` wrapper over the backend REST API. All calls go through `/api/*` 
 | `api.getExposures()` | GET | `/api/analytics/exposures` |
 | `api.getLosses()` | GET | `/api/analytics/losses` |
 | `api.triggerIngest(dir, mode)` | POST | `/api/ingest/trigger` |
+| `api.uploadFiles(files)` | POST | `/api/ingest/upload` (multipart `FormData`) |
 
 ### TanStack Query Hooks (`api/hooks.ts`)
 
@@ -110,9 +111,10 @@ Each API call is wrapped in a TanStack Query hook for automatic caching, backgro
 | `useSummary()` | `useQuery` | `["summary"]` |
 | `useExposures()` | `useQuery` | `["exposures"]` |
 | `useLosses()` | `useQuery` | `["losses"]` |
-| `useIngest()` | `useMutation` | Invalidates all queries on success |
+| `useIngest()` | `useMutation` | Invalidates submissions, summary, exposures, losses on success |
+| `useUpload()` | `useMutation` | Sends files via `api.uploadFiles` |
 
-Default stale time is 30 seconds. The `useIngest` mutation automatically invalidates all cached data after a successful ingestion so the dashboard refreshes.
+Default stale time is 30 seconds (`retry: 1`). The `useIngest` mutation automatically invalidates cached data after a successful ingestion so the dashboard refreshes.
 
 ### TypeScript Types (`api/types.ts`)
 
@@ -154,7 +156,13 @@ Mirrors the Prisma schema exactly — `Submission`, `InsuredInfo`, `BrokerInfo`,
 
 ### Ingest Components
 
-**`IngestPage`** — Form with directory path input, standard/thorough mode toggle buttons, and a trigger button with loading spinner. On success, displays three summary cards (processed/failed/skipped counts) and a detailed results table with per-file status badges.
+**`IngestPage`** — Two-panel ingestion interface:
+
+1. **Upload Zone** — Drag-and-drop area (or file picker) accepting `.eml` and `.pdf` files. Shows a file list with type badges, sizes, and per-file remove buttons. Two actions: "Upload & Ingest" (uploads files then immediately triggers ingestion on the upload directory) and "Upload Only" (uploads without ingesting).
+
+2. **Directory Trigger** — Manual directory path input (defaults to `/app/emails`), standard/thorough mode toggle buttons, and a trigger button with loading spinner.
+
+On success, displays three summary cards (processed/failed/skipped counts) and a detailed results table with per-file status badges.
 
 ---
 
@@ -196,6 +204,7 @@ Loaded from Google Fonts via `<link>` in `index.html`.
 
 ### nginx Routing
 
+- `client_max_body_size 50m` — allows large file uploads to pass through to the API
 - `GET /api/*` → proxied to `http://server:3000/api/` (Express container on Docker network)
 - `GET /*` → serves static files, falls back to `index.html` for SPA client-side routing
 - gzip enabled for text, CSS, JSON, and JS responses
